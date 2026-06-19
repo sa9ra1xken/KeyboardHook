@@ -1,0 +1,13 @@
+#define NUL 0x00
+#define SOH 0x01 //^A
+#define STX 0x02 //^B
+#define ETX 0x03 //^C
+#define EOT 0x04 //^D
+#define ENQ 0x05 //^E
+#define BS  0x08
+#define HT  0x09
+#define LF  0x0A
+#define CR  0x0D
+#define ESC 0x1B //^F
+#define SPC 0x20
+#define DEL 0x7F
