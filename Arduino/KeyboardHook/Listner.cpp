@@ -1,10 +1,17 @@
 #include "Listner.h"
-#include "ASCII_CTR.h"
+#include "Printer.h"
+#include "AsciiCode.h"
+#include "ScanCode.h"
 
-Listner::Listner(int readPin, int _capsPin, int _codePin)
-    : _read_pin(readPin), _caps_pin(_capsPin), _code_pin(_codePin) {}
+Listner::Listner(Printer* prt, int readPin, int _capsPin, int _codePin)
+    : _read_pin(readPin), _caps_pin(_capsPin), _code_pin(_codePin), printer(prt) {}
 
 void Listner::begin() {
+
+        code_d2 = HIGH;
+        code_d1 = HIGH;
+        code_d0 = HIGH;;
+
     for (int i = 0 ; i < 8 ; i++){
         sense_d1[i]= 0xff;
         sense_d2[i]= 0xff;
@@ -22,32 +29,48 @@ void Listner::onScan(){
     uint16_t value = SPI.transfer16(0x0000);
     SPI.endTransaction();
     int col = encode8to3(~value & 0xff);
-    if (col < 0) return;
+    
+    if (col == 0) {
+        code_d2 = code_d1;
+        code_d1 = code_d0;
+        code_d0 = digitalRead(_code_pin);
+    }
     sense_d2[col] = sense_d1[col]; 
     sense_d1[col] = sense_d0[col];
     sense_d0[col] = value >> 8;
-    pressed[col]|= sense_d2[col] & ~sense_d1[col] & ~sense_d0[col]; 
+    uint8_t temp = sense_d2[col] & ~sense_d1[col] & ~sense_d0[col];
+    pressed[col]|= temp;
+    if (temp!=0) {
+        isCodeMode = (code_d2==LOW);      
+    }
 }
 
-int Listner::getScanCode(){
+Listner::ScanCode Listner::getScanCode(){
+    Listner::ScanCode result = { KEY_NOP, false };
     for (int col = 0 ; col < 8 ; col++){
-        uint8_t temp = pressed[col]; 
-        if (temp){
-            int row = encode8to3(temp);
-            pressed[col]=0;
-            return (col << 3) | (encode8to3(temp) & 0b111);
+        uint8_t row_pattern = pressed[col]; 
+        if (row_pattern){
+            pressed[col] = KEY_NOP;
+            result.isCodeMode = isCodeMode; isCodeMode = false;
+            result.KeyCode = (col << 3) | (encode8to3(row_pattern) & 0b111);
+            return result;
         }
     }
-    return -1; //no key has been pressed.
+    return result;
 }
 
 bool Listner::isAllOff(){
-    for (int col = 1 ; col < 8 ; col++){   /*COL1はスライドSWがつながっているのでチェックしない*/
-        if (sense_d2[col] != 0xFF) return false;
-        if (sense_d1[col] != 0xFF) return false;
+    for (int col = 1 ; col < 8 ; col++){   /*col=0はスライドSWがつながっているのでチェックしない*/
         if (sense_d0[col] != 0xFF) return false;
     }
     return true;
+}
+
+void Listner::dumpSwitch(){
+    Serial.print("\nsw_dump:");
+    for (int i = 0 ; i < 8 ; i++ ){
+        Serial.print(sense_d0[i],HEX);
+    }
 }
 
 bool Listner::isUpperCase(){
@@ -55,30 +78,73 @@ bool Listner::isUpperCase(){
 }
 
 int Listner::getAsciiCode(){
-    int scan_code = getScanCode();
-    if (scan_code < 0) return -1;
+    Listner::ScanCode scan_code = getScanCode();
+    if (scan_code.KeyCode == KEY_NOP) return -1;
+    if (scan_code.isCodeMode){
+        if (scan_code.KeyCode==ALPH_J) {
+            printer->type('<');
+            return '<';
+        }
+        if (scan_code.KeyCode==ALPH_K){
+            printer->type('>');
+            return '>';
+        }
+        if (scan_code.KeyCode==ALPH_L){
+            if (isUpperCase()){
+                printer->type('{');
+                return '{';
+            } 
+            else{
+                printer->type('[');
+                return '[';
+            }
+        }
+        if (scan_code.KeyCode==ALPH_M){
+            if (isUpperCase()){
+                printer->type('}');
+                return '}';
+            } 
+            else{
+                printer->type(']');
+                return ']';
+            }
+        }
+        if (scan_code.KeyCode==ALPH_B) {
+            printer->Wait4SOP();
+            return ASC_STX;
+        }
+        if (scan_code.KeyCode==ALPH_C){
+            while (isAllOff()==0){}
+            return ASC_ETX;
+        } 
 
-    if ((digitalRead(_code_pin)==0)){
-        if (scan_code==0x11) return '<';
-        if (scan_code==0x12) return '>';
-        if (scan_code==0x13){
-            if (isUpperCase()) return '{';
-            else return '[';
+        if (scan_code.KeyCode==ALPH_D){
+            printer->ResetCodeMode();
+            return ASC_EOT;
+        } 
+
+        if (scan_code.KeyCode==ALPH_E){
+            printer->ResetCodeMode();
+            return ASC_ENQ;
+        } 
+   
+        if (scan_code.KeyCode==ALPH_F){
+            printer->ResetCodeMode();
+            return ASC_ESC;
         }
-        if (scan_code==0x14){
-            if (isUpperCase()) return '}';
-            else return ']';
-        }
-        if (scan_code==0x09) return STX; //Bキー　
-        if (scan_code==0x0A) return ETX; //Cキー
-        if (scan_code==0x0C) return ENQ; //Eキー
-        if (scan_code==0x0D) return ESC; //Fキー
+       return -1;
     }
-    else{
-        if (scan_code==0x4001) return DEL;
-        if (isUpperCase()) scan_code |= 0x40;
-        return pgm_read_byte(&scan2ascii[scan_code]);
-    }
+ 
+    int ascii;
+    if (isUpperCase()) ascii = pgm_read_byte(&scan2ascii_upper[scan_code.KeyCode & 0x3f]);
+    else ascii = pgm_read_byte(&scan2ascii_lower[scan_code.KeyCode & 0x3f]);
+
+    if (ascii==ASC_NUL) return ASC_NUL;
+    
+    if ((ascii==ASC_CR)||(ascii==ASC_LF))printer->Wait4SOF();
+    else printer->Wait4SOP();
+    
+    return ascii;
 }
 
 int encode8to3(uint8_t value){
@@ -90,26 +156,24 @@ int encode8to3(uint8_t value){
     return -1;  
 };
 
-//#define SPC 0x20
-//#define NUL 0x00
-//#define LF  0x0A
-//#define CR  0x0D
+const char Listner::scan2ascii_lower[] PROGMEM = {
+    /*00*/  ASC_NUL,    ASC_NUL,    ASC_NUL,    ASC_NUL,    ASC_NUL,    ASC_NUL,    ASC_NUL,    ASC_NUL,
+    /*08*/  'a',        'b',        'c',        'd',        'e',        'f',        'g',        'h',
+    /*10*/  'i',        'j',        'k',        'l',        'm',        'n',        'o',        'p',
+    /*18*/  'q',        'r',        's',        't',        'u',        'v',        'w',        'x',
+    /*20*/  'y',        'z',        '0',        '1',        '2',        '3',        '4',        '5',
+    /*28*/  '6',        '7',        '8',        '9',        ',',        '\'',       ';',        '.',
+    /*30*/  '/',        ASC_NUL,    '-',        '=',        ASC_NUL,    ASC_NUL,    '~',        ASC_SPC,
+    /*38*/  ASC_HT,     ASC_DEL,    ASC_CR,     ASC_NUL,    ASC_BS,     ASC_NUL,    ASC_NUL,    ASC_NUL,
+};
 
-const char Listner::scan2ascii[] PROGMEM = {
-    /*00*/  NUL,     NUL,   NUL,    NUL,    NUL,    NUL,    NUL,    NUL,
-    /*08*/  'a',    'b',    'c',    'd',    'e',    'f',    'g',    'h',
-    /*10*/  'i',    'j',    'k',    'l',    'm',    'n',    'o',    'p',
-    /*18*/  'q',    'r',    's',    't',    'u',    'v',    'w',    'x',
-    /*20*/  'y',    'z',    '0',    '1',    '2',    '3',    '4',    '5',
-    /*28*/  '6',    '7',    '8',    '9',    ',',    '\'',   ';',    '.',
-    /*30*/  '/',    NUL,    '-',    '=',    NUL,    NUL,    '~',    SPC,
-    /*38*/  HT,     DEL,    CR,     NUL,    BS,     NUL,    NUL,    NUL,
-    /*40*/  NUL,    NUL,    NUL,    NUL,    NUL,    NUL,    NUL,    NUL,
-    /*48*/  'A',    'B',    'C',    'D',    'E',    'F',    'G',    'H',
-    /*50*/  'I',    'J',    'K',    'L',    'M',    'N',    'O',    'P',
-    /*58*/  'Q',    'R',    'S',    'T',    'U',    'V',    'W',    'X',
-    /*60*/  'Y',    'Z',    ')',    '!',    '@',    '#',    '&',    '%',
-    /*68*/  '\\',   '&',    -1,     '(',    ',',    '"',    ':',    '.',
-    /*70*/  '?',    NUL,    '_',    '+',    NUL,    NUL,    '*',    SPC,
-    /*78*/  HT,     DEL,    LF,     NUL,    BS,     NUL,    NUL,    NUL,
+const char Listner::scan2ascii_upper[] PROGMEM = {
+    /*40*/  ASC_NUL,    ASC_NUL,    ASC_NUL,    ASC_NUL,    ASC_NUL,    ASC_NUL,    ASC_NUL,    ASC_NUL,
+    /*48*/  'A',        'B',        'C',        'D',        'E',        'F',        'G',        'H',
+    /*50*/  'I',        'J',        'K',        'L',        'M',        'N',        'O',        'P',
+    /*58*/  'Q',        'R',        'S',        'T',        'U',        'V',        'W',        'X',
+    /*60*/  'Y',        'Z',        ')',        '!',        '@',        '#',        '&',        '%',
+    /*68*/  '\\',       '&',        -1,         '(',        ',',        '"',        ':',        '.',
+    /*70*/  '?',        ASC_NUL,    '_',        '+',        ASC_NUL,    ASC_NUL,    '*',        ASC_SPC,
+    /*78*/  ASC_HT,     ASC_DEL,    ASC_LF,     ASC_NUL,    ASC_BS,     ASC_NUL,    ASC_NUL,    ASC_NUL,
 };
