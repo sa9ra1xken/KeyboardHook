@@ -2,6 +2,7 @@
 
 This project aims to remodel a 1980s electronic typewriter into an online terminal in order to recreate the computing environment of the 1970s.
 The project uses a Canon electronic typewriter Model S-14 which employs a daisy-wheel impact printing mechanism, manufactured in 1986.
+![](./Figs/OriginalCanonS-14.jpg)
  
 # Technical approrch
 
@@ -63,6 +64,10 @@ Below shows the unsupported characters and the replaced overtyping combination I
 # Inputting unsupported characters 
 
 There is a special button named CODE on the keyboard.
+![](./Figs/CODE_button.jpg)
+
+
+
 The original function of the button is to bring the typewriter into special mode in which you can change some operating parameters such as Left and Right Margins, TAB position, character pitch, etc. I named the mode "CODE mode".         
 Since pressing any of the alphabet keys when the typewriter is in CODE mode doesn't make printing action, I used CODE mode for inputting the unsupported characters and some ASCII control codes. Below shows the key functions in CODE mode I implemented.
 
@@ -91,36 +96,35 @@ By the way, though pressing alphabet keys in CODE mode doesn't print, some varia
 |J-M|Do nothing and exit CODE mode|
 |N-Z|sounds beep|
 
+# Sumary of adapter interface
 
-
-```mermaid
-
-graph TD
-
-    A[Start] --> B[Process]
-
-    B --> C[End]
-
-```
-```mermaid
-graph LR
-
-subgraph RaspberryPi
-    SIMH[SIMH PDP-8]
-    BRIDGE[Python Bridge]
-end
-
-subgraph Arduino
-    NANO[Arduino Nano]
-end
-
-subgraph Typewriter
-    KB[Keyboard Scan]
-    PRN[Print Control]
-end
-
-SIMH <--> BRIDGE
-BRIDGE <--> NANO
-NANO --> KB
-NANO --> PRN
-```
+|pin#|in/out|signal function    |main board connection  |
+|----|------|-------------------|-----------------------|
+|1   |      |                   |                       |
+|2   |      |                   |                       |
+|3   |in    |+feed in progress  |IC7.Pin16              |
+|4   |      |                   |                       |
+|5   |      |                   |                       |
+|6   |      |                   |                       |
+|7   |in    |-print in progress |IC7.pin24              |
+|8   |pass. |KBD matrix ROW0    |FFC.pin21              |
+|9   |pass. |KBD matrix ROW1    |FFC.pin20              |
+|10  |pass. |KBD matrix ROW2    |FFC.pin19              |
+|11  |pass. |KBD matrix ROW3    |FFC.pin18              |
+|12  |pass. |KBD matrix ROW4    |FFC.pin17              |
+|13  |pass. |KBD matrix ROW6    |FFC.pin16              |
+|14  |pass. |KBD matrix ROW6    |FFC.pin15              |
+|15  |pass. |KBD matrix ROW7    |FFC.pin14              |
+|16  |pass. |KBD matrix COL0    |FFC.pin13              |
+|17  |pass. |KBD matrix COL1    |FFC.pin12              |
+|18  |pass. |KBD matrix COL2    |FFC.pin11              |
+|19  |pass. |KBD matrix COL3    |FFC.pin10              |
+|20  |pass. |KBD matrix COL4    |FFC.pin9               |
+|21  |pass. |KBD matrix COL5    |FFC.pin8               |
+|22  |pass. |KBD matrix COL6    |FFC.pin7               |
+|23  |pass. |KBD matrix COL7    |FFC.pin6               |
+|24  |power |ground             |FFC.pin5               |
+|25  |      |                   |FFC.pin4               |
+|26  |in    |-shift lock        |FFC.pin3               |
+|27  |in    |-CODE mode         |FFC.pin2               |
+|28  |power |power supply(+5V)  |FFC.pin1               |
