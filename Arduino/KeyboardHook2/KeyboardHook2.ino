@@ -50,18 +50,6 @@ void onScanISR() {
 
 void loop() {
     if (Serial.available() > 0) {
-        /*
-        if (Serial.peek()==ASC_SOH){
-            Serial.read();
-            while (Serial.available() <= 0){}
-            switch(Serial.read()){
-                case 's':
-                    listner.dumpSwitch();
-                    break;
-            }
-        }
-        else
-        */    
         if ((digitalRead(_codePin)==HIGH)&&listner.isAllOff()){
             printer.type(Serial.read());
             Serial.write(ASC_ACK);    
