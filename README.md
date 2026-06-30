@@ -73,11 +73,11 @@ Since pressing any of the alphabet keys when the typewriter is in CODE mode does
 
 |Key      |Function in CODE mode     |
 |---------|--------------------------|
-|B        |Send CTRL-B (ESC) to host |
-|C        |Send CTRL-B (ESC) to host |
-|D        |Send CTRL-B (ESC) to host |
-|E        |Send CTRL-B (ESC) to host |
-|F        |Send CTRL-B (ESC) to host |
+|B        |Send CTRL-B (STX) to host |
+|C        |Send CTRL-C (ETX) to host |
+|D        |Send CTRL-D (EOT) to host |
+|E        |Send CTRL-E (ENQ) to host |
+|F        |Send CTRL-F (ESC) to host |
 |J        |behaves as '<' key        |
 |K        |behaves as '>' key        |
 |L        |behaves as '[' key        |
